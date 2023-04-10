@@ -12,39 +12,30 @@ class RuleView(GenericViewSet):
     permission_classes = [IsAuthenticated]
     queryset = SQLAdvisor_rule_config.objects.filter()
     serializer_class = SQLAdvisor_rule_configSerializer
+    
+    def api_request_util(user_id, url, request_method, param=None):
+    token = Token.objects.get(user_id=user_id)
+    headers = {"Authorization": "Token %s" % token}
+    request_method = str(request_method).upper()
 
-    def __init__(self):
-        self.return_dict = {}
-
-    def get_objects(self, request):
-        try:
-            keyword = request.data.get("Args").get("id")
-            return self.get_queryset().get(pk=keyword)
-        except Exception as e:
-            return JsonResponse(message=str(e))
-
-    def get_keyword(self, request):
-        try:
-            keyword = request.data.get("Args").get("keyword", "")
-            return keyword
-        except Exception as e:
-            return JsonResponse(message=str(e))
-
-    def RuleListView(self, request):
-        keyword = self.get_keyword(request)
-        if keyword:
-            queryset2 = self.get_queryset().filter(
-                Q(rule_name__icontains=keyword)
-                | Q(rule_desc__icontains=keyword))
+    try:
+        if request_method == 'GET':
+            response = requests.get(url, params=param, headers=headers, verify=False)
+        elif request_method == 'POST':
+            headers["Content-Type"] = "application/json"
+            response = requests.post(url, json=param, headers=headers, timeout=3600, verify=False)
         else:
-            queryset2 = self.get_queryset()
-        self.return_dict['rows'] = self.get_serializer(instance=queryset2, many=True).data
-        return JsonResponse(success=True, data=self.return_dict, message='获取成功')
+            return {"msg": "request method is not supported"}
+        return json.loads(response.text)
+    except Exception as e:
+        return {"msg": str(e)}
 
     def RuleUpdateView(self, request):
         args = request.data.get("Args")
         url = LOCAL_SERVER_URL + "/api/set_sqladvisor_variables_api/"
         result = api_request_util('1', url, "POST", args)
+        
+        LOCAL_SERVER_URL = "http://192.168.56.102:8000"
 
         if result["Success"]:
             instance = self.get_objects(request)
@@ -53,3 +44,4 @@ class RuleView(GenericViewSet):
             serializer.save()
             return JsonResponse(success=True, data=serializer.data, message='修改成功')
         return JsonResponse(success=False, data=result.data["Data"], message=result.data["Message"])
+    
